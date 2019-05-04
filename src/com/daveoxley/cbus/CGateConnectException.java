@@ -21,7 +21,7 @@ package com.daveoxley.cbus;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public class CGateConnectException extends CGateException
 {

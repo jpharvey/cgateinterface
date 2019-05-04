@@ -42,18 +42,19 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.commons.pool.impl.GenericObjectPool.Config;
 
+
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public class CGateSession extends CGateObject
 {
-    private final static Log log = LogFactory.getLog(CGateSession.class);
+    private  Logger logger = LoggerFactory.getLogger(CGateSession.class);
 
     private final Map<String,BufferedWriter> response_writers = Collections.synchronizedMap(new HashMap<String,BufferedWriter>());
 
@@ -61,7 +62,7 @@ public class CGateSession extends CGateObject
 
     private final EventConnection event_connection;
 
-    private final StatusChangeConnection status_change_connection;
+    private final StatusChangeConnection status_change_connection = null;
 
     private final PingConnections ping_connections;
 
@@ -69,19 +70,33 @@ public class CGateSession extends CGateObject
 
     private boolean connected = false;
 
+    private String sessionID;
+
     CGateSession(InetAddress cgate_server, int command_port, int event_port, int status_change_port)
     {
-        super(null);
-        if (cgate_server == null)
-            throw new NullPointerException("cgate_server cannot be null");
 
+        super(null);
+	    logger.error("Cgatesession constructing");
+	if (cgate_server == null)
+	{
+		logger.debug("Going to throw here");
+            throw new NullPointerException("cgate_server cannot be null");
+	}
+	    logger.error("Cgatesession constructed have server");
         setupSubtreeCache("project");
+	logger.error("Cgatesession 1");
         command_connection = new CommandConnection(cgate_server, command_port);
+	logger.error("Cgatesession 2");
         event_connection = new EventConnection(cgate_server, event_port);
-        status_change_connection = new StatusChangeConnection(cgate_server, status_change_port);
-        registerEventCallback(new DebugEventCallback());
-        registerStatusChangeCallback(new DebugStatusChangeCallback());
+	logger.error("Cgatesession 3");
+//        status_change_connection = new StatusChangeConnection(cgate_server, status_change_port);
+	logger.error("Cgatesession 4");
+//        registerEventCallback(new DebugEventCallback());
+	logger.error("Cgatesession 5");
+//        registerStatusChangeCallback(new DebugStatusChangeCallback());
+	logger.error("Cgatesession 6");
         ping_connections = new PingConnections();
+		    logger.error("Cgatesession done all constructed");
     }
 
     @Override
@@ -218,6 +233,7 @@ public class CGateSession extends CGateObject
 
     public boolean isConnected()
     {
+	    logger.error("Is connected {}",connected);
         return connected;
     }
 
@@ -236,6 +252,26 @@ public class CGateSession extends CGateObject
             throw new CGateNotConnectedException();
         }
     }
+
+    private void updateSessionID() {
+	    try {
+	        if (!isConnected()) {
+		   return;
+		}
+		sendCommand("session_id tag openHAB C-Bus Binding").handle200();
+		ArrayList<String> resp_array = sendCommand("session_id").toArray();
+		this.sessionID = responseToMap(resp_array.get(0)).get("sessionID");
+		logger.debug("Updated session id: {}", sessionID);
+	    } catch (CGateException e) {
+		    logger.error("Cannot check session id", e);
+	    }
+	}
+	public String getSessionID() {
+	    if (sessionID == null) {
+		updateSessionID();
+	    }
+	    return sessionID;
+	}
 
     private abstract class CGateConnection implements Runnable
     {
@@ -456,7 +492,7 @@ public class CGateSession extends CGateObject
         @Override
         protected void logConnected() throws IOException
         {
-            log.debug(getInputReader().readLine());
+            logger.debug(getInputReader().readLine());
         }
 
         @Override
@@ -503,6 +539,7 @@ public class CGateSession extends CGateObject
         private EventConnection(InetAddress server, int port)
         {
             super(server, port, false);
+	    logger.debug("Event Connectioin 1");
             ThreadPoolCreator tp_creator = new ThreadPoolCreator() {
 
                 public ThreadObjectFactory getThreadObjectFactory() {
@@ -525,6 +562,7 @@ public class CGateSession extends CGateObject
                     };
                 }
 
+
                 public Config getThreadPoolConfig() {
                     Config config = new Config();
                     config.maxActive = 10;
@@ -541,7 +579,9 @@ public class CGateSession extends CGateObject
                     return "EventPool";
                 }
             };
-            event_callback_pool = new ThreadPool(tp_creator.getThreadObjectFactory(), tp_creator.getThreadPoolConfig());
+	logger.error("Cgatesession 2");
+//	event_callback_pool = new ThreadPool(tp_creator.getThreadObjectFactory(), tp_creator.getThreadPoolConfig());
+	logger.error("Cgatesession 3");
         }
 
         private void registerEventCallback(EventCallback event_callback)
@@ -596,7 +636,7 @@ public class CGateSession extends CGateObject
 
     /**
      *
-     * @param event_callback
+     * @param status_change_callback
      */
     public void registerStatusChangeCallback(StatusChangeCallback status_change_callback)
     {

@@ -20,26 +20,26 @@
 package com.daveoxley.cbus.status;
 
 import com.daveoxley.cbus.CGateSession;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public class DebugStatusChangeCallback extends StatusChangeCallback
 {
-    private final static Log log = LogFactory.getLog(DebugStatusChangeCallback.class);
+    private Logger logger = LoggerFactory.getLogger(DebugStatusChangeCallback.class);
 
     public boolean isActive()
     {
-        return log.isDebugEnabled();
+        return logger.isDebugEnabled();
     }
 
     @Override
     public void processStatusChange(CGateSession cgate_session, String status_change)
     {
-        log.debug("status_change: " + status_change);
+        logger.debug("status_change: " + status_change);
     }
 
 }

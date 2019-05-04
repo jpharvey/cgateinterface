@@ -24,7 +24,7 @@ import java.util.GregorianCalendar;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public abstract class EventCallback
 {

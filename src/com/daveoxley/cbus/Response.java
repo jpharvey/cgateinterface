@@ -28,18 +28,18 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.commons.pool.impl.GenericObjectPool.Config;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public class Response implements Iterable<String>
 {
-    private final static Log log = LogFactory.getLog(Response.class);
+    private final static Logger logger = LoggerFactory.getLogger(Response.class);
 
     private final static ThreadPool response_pool;
 
@@ -123,11 +123,11 @@ public class Response implements Iterable<String>
                             has_more = responseHasMore(response);
                         }
 
-                        if (log.isDebugEnabled())
+                        if (logger.isDebugEnabled())
                         {
                             for (String response : array_response)
                             {
-                                log.debug("response: " + response);
+                                logger.debug("response: " + response);
                             }
                         }
                     }

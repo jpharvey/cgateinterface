@@ -23,7 +23,7 @@ import com.daveoxley.cbus.CGateSession;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public abstract class StatusChangeCallback {
 

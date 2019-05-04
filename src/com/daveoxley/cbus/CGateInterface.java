@@ -23,7 +23,7 @@ import java.net.InetAddress;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley (dave@daveoxley.co.uk)
  */
 public final class CGateInterface extends CGateObject
 {
