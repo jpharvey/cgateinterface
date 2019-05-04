@@ -78,7 +78,7 @@ public class ProjectTest {
         System.out.println("getName");
 
         ArrayList<Project> result = Project.dir(session, false);
-        assertEquals("HOME", result.get(0).getName());
+        assertEquals("OURHOME", result.get(0).getName());
 
         result = Project.list(session, false);
         assertEquals("HOME", result.get(0).getName());
