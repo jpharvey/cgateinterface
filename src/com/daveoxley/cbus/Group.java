@@ -23,7 +23,7 @@ import java.util.ArrayList;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class Group extends CGateObject implements Comparable<Group>
 {

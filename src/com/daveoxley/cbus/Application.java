@@ -26,7 +26,7 @@ import java.util.Comparator;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class Application extends CGateObject implements Comparable<Application>
 {

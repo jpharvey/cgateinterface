@@ -25,12 +25,13 @@ import org.apache.commons.logging.LogFactory;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class DebugStatusChangeCallback extends StatusChangeCallback
 {
     private final static Log log = LogFactory.getLog(DebugStatusChangeCallback.class);
 
+    @Override
     public boolean isActive()
     {
         return log.isDebugEnabled();

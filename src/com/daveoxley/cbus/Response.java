@@ -35,7 +35,7 @@ import org.apache.commons.pool.impl.GenericObjectPool.Config;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class Response implements Iterable<String>
 {

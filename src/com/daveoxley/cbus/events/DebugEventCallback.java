@@ -26,7 +26,7 @@ import org.apache.commons.logging.LogFactory;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class DebugEventCallback extends EventCallback
 {

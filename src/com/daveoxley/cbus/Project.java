@@ -24,7 +24,7 @@ import java.util.HashMap;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public final class Project extends CGateObject implements Comparable<Project>
 {
@@ -88,7 +88,7 @@ public final class Project extends CGateObject implements Comparable<Project>
 
     @Override
     public int compareTo(Project o) {
-        return project_name.compareTo(project_name);
+        return project_name.compareTo(o.project_name);
     }
 
     /**
@@ -262,7 +262,7 @@ public final class Project extends CGateObject implements Comparable<Project>
      * 
      * @see <a href="http://www.clipsal.com/cis/downloads/Toolkit/CGateServerGuide_1_0.pdf">
      *      <i>C-Gate Server Guide 4.3.87</i></a>
-     * @param project_name The project name of the new copy
+     * @param target_project_name The project name of the new copy
      * @return Project The new copy of the current Project
      * @throws CGateException
      */
