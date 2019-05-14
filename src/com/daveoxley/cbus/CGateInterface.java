@@ -20,13 +20,17 @@
 package com.daveoxley.cbus;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CountDownLatch;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public final class CGateInterface extends CGateObject
 {
+
     private CGateInterface()
     {
         super(null);
@@ -60,11 +64,14 @@ public final class CGateInterface extends CGateObject
      * @param command_port The command port for the C-Gate server
      * @param event_port The event port for the C-Gate server
      * @param status_change_port The status change port for the C-Gate server
+     * @param threadPool Implementation of threadPool 
      * @return CGateSession The C-Gate session
      */
-    public static CGateSession connect(InetAddress cgate_server, int command_port, int event_port, int status_change_port)
+    public static CGateSession connect(InetAddress cgate_server, int command_port, int event_port, int status_change_port, CGateThreadPool threadPool)
     {
-        return new CGateSession(cgate_server, command_port, event_port, status_change_port);
+        if (threadPool == null)
+	    return null;
+        return new CGateSession(cgate_server, command_port, event_port, status_change_port, threadPool);
     }
 
     /**
@@ -75,8 +82,66 @@ public final class CGateInterface extends CGateObject
      * @param cgate_session
      * @throws com.daveoxley.cbus.CGateException
      */
-    public static void noop(CGateSession cgate_session) throws CGateException
+    public static void noop2(CGateSession cgate_session) throws CGateException
     {
-        cgate_session.sendCommand("noop").handle200();
+        ArrayList<String> resp_array = cgate_session.sendCommand("noop").toArray();
+        if (resp_array.isEmpty()) {
+            throw new CGateException();
+        }
+
+        String resp_str = resp_array.get(resp_array.size() - 1);
+        String result_code = resp_str.substring(0, 3).trim();
+        if (!result_code.equals("200")) {
+            throw new CGateException(resp_str);
+        }
+    }
+
+    public static boolean noop(CGateSession cGateSession) {
+        try { 
+            CountDownLatch doneSignal = new CountDownLatch(1);
+	    
+            NoopCheck thread = new NoopCheck(doneSignal, cGateSession);
+	    CGateThreadPool threadPool = cGateSession.getThreadPool();
+	    CGateThreadPoolExecutor threadExecutor = threadPool.CreateExecutor("noop");
+            threadExecutor.execute(thread);
+            if (!doneSignal.await(3, TimeUnit.SECONDS)) {
+                thread.interrupt();
+                cGateSession.close();
+                return false;
+            }
+
+            return true;
+
+        } catch (InterruptedException | CGateException e) {
+            return false;
+        }
+    }
+
+    private static class NoopCheck extends Thread {
+        private final CountDownLatch doneSignal;
+        private final CGateSession cGateSession;
+
+        protected NoopCheck(CountDownLatch doneSignal, CGateSession cGateSession) {
+            this.doneSignal = doneSignal;
+            this.cGateSession = cGateSession;
+        }
+
+        @Override
+        public void run() {
+            try {
+                ArrayList<String> resp_array = cGateSession.sendCommand("noop").toArray();
+                if (resp_array.isEmpty()) {
+                    throw new CGateException();
+                }
+
+                String resp_str = resp_array.get(resp_array.size() - 1);
+                String result_code = resp_str.substring(0, 3).trim();
+                if (!result_code.equals("200")) {
+                    throw new CGateException(resp_str);
+                }
+                doneSignal.countDown();
+            } catch (Exception e) {
+            }
+        }
     }
 }
