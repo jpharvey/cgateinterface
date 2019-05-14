@@ -55,7 +55,6 @@ public class CGateTestThreadPoolExecutor extends CGateThreadPoolExecutor
 
                 public Config getThreadPoolConfig() {
                     Config config = new Config();
-		    System.out.println("GetThreadPoolConfig max " + config.maxActive + " Max Wait " + config.maxWait);
                     config.maxActive = 10;
                     config.minIdle   = 2;
                     config.maxIdle   = 5;
