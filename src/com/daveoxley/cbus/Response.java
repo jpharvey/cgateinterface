@@ -19,19 +19,14 @@
 
 package com.daveoxley.cbus;
 
-import com.workplacesystems.utilsj.threadpool.ThreadObjectFactory;
-import com.workplacesystems.utilsj.threadpool.ThreadPool;
-import com.workplacesystems.utilsj.threadpool.ThreadPoolCreator;
-import com.workplacesystems.utilsj.threadpool.WorkerThread;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.commons.pool.impl.GenericObjectPool;
-import org.apache.commons.pool.impl.GenericObjectPool.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 
 /**
  *
@@ -39,49 +34,15 @@ import org.apache.commons.pool.impl.GenericObjectPool.Config;
  */
 public class Response implements Iterable<String>
 {
-    private final static Log log = LogFactory.getLog(Response.class);
+    private Logger logger = LoggerFactory.getLogger(Response.class);
 
-    private final static ThreadPool response_pool;
+    static private CGateThreadPoolExecutor response_threadPool = null;
 
-    static
+    static void SetThreadPool(CGateThreadPool threadPool)
     {
-        ThreadPoolCreator tp_creator = new ThreadPoolCreator() {
-
-            public ThreadObjectFactory getThreadObjectFactory() {
-                return new ThreadObjectFactory() {
-                    @Override
-                    public void initialiseThread(Thread thread)
-                    {
-                        thread.setName("Response");
-                    }
-
-                    @Override
-                    public void activateThread(Thread thread)
-                    {
-                    }
-
-                    @Override
-                    public void passivateThread(Thread thread)
-                    {
-                    }
-                };
-            }
-
-            public Config getThreadPoolConfig() {
-                Config config = new Config();
-                config.minIdle   = 2;
-                config.maxIdle   = 5;
-                config.testOnBorrow = false;
-                config.testOnReturn = true;
-                config.whenExhaustedAction = GenericObjectPool.WHEN_EXHAUSTED_GROW;
-                return config;
-            }
-
-            public String getThreadPoolName() {
-                return "ResponsePool";
-            }
-        };
-        response_pool = new ThreadPool(tp_creator.getThreadObjectFactory(), tp_creator.getThreadPoolConfig());
+    	if (threadPool == null)
+		new CGateException("No threadpool available");
+	response_threadPool = threadPool.CreateExecutor("ResponsePool");
     }
 
     private final Object response_mutex = new Object();
@@ -90,7 +51,6 @@ public class Response implements Iterable<String>
 
     private BufferedReader response_reader;
 
-    private WorkerThread response_thread;
 
     private ArrayList<String> array_response;
 
@@ -101,8 +61,8 @@ public class Response implements Iterable<String>
         try
         {
             this.response_reader = response_reader;
-            this.response_thread = (WorkerThread) response_pool.borrowObject();
-            this.response_thread.execute(new Runnable() {
+            response_threadPool.execute(new Runnable() {
+		@Override
                 public void run()
                 {
                     synchronized (iterator_mutex)
@@ -123,11 +83,11 @@ public class Response implements Iterable<String>
                             has_more = responseHasMore(response);
                         }
 
-                        if (log.isDebugEnabled())
+                        if (logger.isDebugEnabled())
                         {
                             for (String response : array_response)
                             {
-                                log.debug("response: " + response);
+                                logger.debug("response: {}",response);
                             }
                         }
                     }
@@ -138,7 +98,6 @@ public class Response implements Iterable<String>
                     finally
                     {
                         Response.this.response_reader = null;
-                        Response.this.response_thread = null;
                         synchronized (Response.this.response_mutex)
                         {
                             synchronized (Response.this.iterator_mutex)
@@ -150,7 +109,7 @@ public class Response implements Iterable<String>
                         }
                     }
                 }
-            }, null);
+            });
         }
         catch (Exception e)
         {
@@ -160,7 +119,7 @@ public class Response implements Iterable<String>
 
     static boolean responseHasMore(String response)
     {
-        return response.substring(3,4).equals("-");
+        return response == null ? false : response.substring(3, 4).equals("-");
     }
 
     ArrayList<String> toArray()
@@ -171,7 +130,7 @@ public class Response implements Iterable<String>
             {
                 try
                 {
-                    response_mutex.wait();
+		    response_mutex.wait(10000l);
                 }
                 catch (InterruptedException ie) {}
             }
@@ -180,11 +139,13 @@ public class Response implements Iterable<String>
         return array_response;
     }
 
+    @Override
     public Iterator<String> iterator()
     {
         return new Iterator<String>() {
             private int index = 0;
 
+	    @Override
             public boolean hasNext()
             {
                 synchronized (iterator_mutex)
@@ -193,7 +154,7 @@ public class Response implements Iterable<String>
                     {
                         try
                         {
-                            iterator_mutex.wait();
+			    iterator_mutex.wait(10000l);
                         }
                         catch (InterruptedException ie) {}
                     }
@@ -208,6 +169,7 @@ public class Response implements Iterable<String>
                 }
             }
 
+            @Override
             public String next()
             {
                 synchronized (iterator_mutex)
@@ -219,6 +181,7 @@ public class Response implements Iterable<String>
                 }
             }
 
+            @Override
             public void remove() {
                 throw new UnsupportedOperationException("remove not supported");
             }
