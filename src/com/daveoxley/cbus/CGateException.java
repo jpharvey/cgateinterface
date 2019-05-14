@@ -22,8 +22,8 @@ package com.daveoxley.cbus;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.reflect.InvocationTargetException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -31,7 +31,7 @@ import org.apache.commons.logging.LogFactory;
  */
 public class CGateException extends Exception
 {
-    private final static Log log = LogFactory.getLog(CGateException.class);
+    private Logger logger = LoggerFactory.getLogger(CGateException.class);
 
     private final static String new_line = System.getProperty("line.separator");
 
@@ -86,6 +86,6 @@ public class CGateException extends Exception
         printStackTrace(pr);
         message += new_line + new_line + sw.toString();
 
-        log.fatal(message);
+        logger.error("{}",message);
     }
 }
