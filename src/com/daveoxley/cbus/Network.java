@@ -24,7 +24,7 @@ import java.util.HashMap;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public final class Network extends CGateObject implements Comparable<Network>
 {
@@ -108,7 +108,7 @@ public final class Network extends CGateObject implements Comparable<Network>
     @Override
     String getResponseAddress(boolean id)
     {
-        return String.valueOf(getNetworkID());
+	return String.valueOf(getNetworkID());
     }
 
     @Override
@@ -147,10 +147,10 @@ public final class Network extends CGateObject implements Comparable<Network>
     }
 
     /**
-     * Retrieve the Unit Object for the specified unit id.
+     * Retrieve the Application Object for the specified application id.
      * 
-     * @param unit_id The unit to retrieve
-     * @return The Unit
+     * @param application_id The unit to retrieve
+     * @return The Application
      * @throws CGateException
      */
     public Application getApplication(int application_id) throws CGateException
@@ -386,5 +386,13 @@ public final class Network extends CGateObject implements Comparable<Network>
         }
 
         return applications;
+    }
+
+    public void startSync() throws CGateException {
+        getCGateSession().sendCommand("getstate " + getAddress());
+    }
+
+    public boolean isOnline() throws CGateException {
+        return "ok".equals(getState());
     }
 }
