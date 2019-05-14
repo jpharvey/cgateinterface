@@ -30,7 +30,7 @@ import org.junit.Test;
  * @author dave
  */
 public class CGateSessionTest {
-
+    public CGateThreadPool m_threadPool = null;
     public CGateSessionTest() {
     }
 
@@ -44,6 +44,7 @@ public class CGateSessionTest {
 
     @Before
     public void setUp() {
+	    m_threadPool = new CGateTestThreadPool();
     }
 
     @After
@@ -58,7 +59,7 @@ public class CGateSessionTest {
         System.out.println("getCGateObject");
 
         CGateSession session = CGateInterface.connect(CGateConfig.SERVER, CGateConfig.COMMAND_PORT,
-                CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT);
+						      CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT, m_threadPool);
         session.connect();
         session.getCGateObject("//HOME/254/56/1");
         session.close();

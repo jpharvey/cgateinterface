@@ -31,7 +31,7 @@ import static org.junit.Assert.*;
  * @author Dave Oxley <dave@daveoxley.co.uk>
  */
 public class CGateInterfaceTest {
-
+	public CGateThreadPool m_threadPool = null;
     public CGateInterfaceTest() {
     }
 
@@ -45,6 +45,7 @@ public class CGateInterfaceTest {
 
     @Before
     public void setUp() {
+	    m_threadPool = new CGateTestThreadPool();
     }
 
     @After
@@ -60,13 +61,13 @@ public class CGateInterfaceTest {
 
         try
         {
-            CGateSession result = CGateInterface.connect(null, 0, 0, 0);
-            fail("NullPointerException should have been thrown");
+            CGateSession result = CGateInterface.connect(null, 0, 0, 0, m_threadPool);
+	    fail("NullPointerException should have been thrown");
         }
         catch (NullPointerException npe) {}
 
         CGateSession session = CGateInterface.connect(CGateConfig.SERVER, CGateConfig.COMMAND_PORT,
-                CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT);
+						      CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT, m_threadPool);
         assertNotNull(session);
         session.connect();
         session.close();
@@ -87,7 +88,7 @@ public class CGateInterfaceTest {
         catch (NullPointerException npe) {}
 
         CGateSession session = CGateInterface.connect(CGateConfig.SERVER, CGateConfig.COMMAND_PORT,
-                CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT);
+						      CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT, m_threadPool);
         session.connect();
         CGateInterface.noop(session);
         session.close();

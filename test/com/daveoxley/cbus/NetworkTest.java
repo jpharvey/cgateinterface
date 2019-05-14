@@ -45,11 +45,13 @@ public class NetworkTest {
     }
 
     private CGateSession session;
-
+    private CGateThreadPool m_threadPool = null;
     @Before
     public void setUp() throws CGateConnectException {
+	    m_threadPool = new CGateTestThreadPool();	    
         session = CGateInterface.connect(CGateConfig.SERVER, CGateConfig.COMMAND_PORT,
-                CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT);
+					 CGateConfig.EVENT_PORT, CGateConfig.STATUS_CHANGE_PORT,
+					 m_threadPool);
         session.connect();
     }
 
