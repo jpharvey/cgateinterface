@@ -23,10 +23,6 @@ import com.daveoxley.cbus.events.DebugEventCallback;
 import com.daveoxley.cbus.events.EventCallback;
 import com.daveoxley.cbus.status.DebugStatusChangeCallback;
 import com.daveoxley.cbus.status.StatusChangeCallback;
-import com.workplacesystems.utilsj.threadpool.ThreadObjectFactory;
-import com.workplacesystems.utilsj.threadpool.ThreadPool;
-import com.workplacesystems.utilsj.threadpool.ThreadPoolCreator;
-import com.workplacesystems.utilsj.threadpool.WorkerThread;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -36,27 +32,35 @@ import java.io.PipedWriter;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.commons.pool.impl.GenericObjectPool;
-import org.apache.commons.pool.impl.GenericObjectPool.Config;
+import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+//JH To remove
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.lang.reflect.InvocationTargetException;
 
 /**
  *
- * @author Dave Oxley <dave@daveoxley.co.uk>
+ * @author Dave Oxley &lt;dave@daveoxley.co.uk&gt;
  */
 public class CGateSession extends CGateObject
 {
-    private final static Log log = LogFactory.getLog(CGateSession.class);
+    private Logger logger = LoggerFactory.getLogger(DebugStatusChangeCallback.class);
 
-    private final Map<String,BufferedWriter> response_writers = Collections.synchronizedMap(new HashMap<String,BufferedWriter>());
+    private final Map<String, BufferedWriter> response_writers = Collections.synchronizedMap(new HashMap<String,BufferedWriter>());
 
+    private final Map<String, PipedWriter> piped_writers = Collections.synchronizedMap(new HashMap<String, PipedWriter>());
+
+    private final ReentrantLock piped_writers_lock = new ReentrantLock();
     private final CommandConnection command_connection;
 
     private final EventConnection event_connection;
@@ -67,20 +71,26 @@ public class CGateSession extends CGateObject
 
     private boolean pingKeepAlive = true;
 
-    private boolean connected = false;
+    private volatile boolean connected = false;
 
-    CGateSession(InetAddress cgate_server, int command_port, int event_port, int status_change_port)
+    private String sessionID;
+
+    private CGateThreadPool m_threadPool = null;
+
+    CGateSession(InetAddress cgate_server, int command_port, int event_port, int status_change_port,
+                 CGateThreadPool threadPool)
     {
         super(null);
+        m_threadPool = threadPool;
         if (cgate_server == null)
             throw new NullPointerException("cgate_server cannot be null");
-
+	Response.SetThreadPool(threadPool);
         setupSubtreeCache("project");
         command_connection = new CommandConnection(cgate_server, command_port);
         event_connection = new EventConnection(cgate_server, event_port);
         status_change_connection = new StatusChangeConnection(cgate_server, status_change_port);
-        registerEventCallback(new DebugEventCallback());
-        registerStatusChangeCallback(new DebugStatusChangeCallback());
+        //JH registerEventCallback(new DebugEventCallback()); //JH CommentedOut
+        //JH registerStatusChangeCallback(new DebugStatusChangeCallback()); //JH CommentedOut
         ping_connections = new PingConnections();
     }
 
@@ -95,7 +105,7 @@ public class CGateSession extends CGateObject
     {
         return null;
     }
-    
+
     @Override
     public CGateObject getCGateObject(String address) throws CGateException
     {
@@ -140,6 +150,7 @@ public class CGateSession extends CGateObject
 
         try
         {
+            sessionID = null;
             command_connection.start();
             event_connection.start();
             status_change_connection.start();
@@ -180,15 +191,38 @@ public class CGateSession extends CGateObject
         {
             try
             {
-                sendCommand("quit").toArray();
+		sendCommand("quit").toArray();
             }
             catch (Exception e) {}
-
             try
             {
-                command_connection.stop();
-                event_connection.stop();
-                status_change_connection.stop();
+		piped_writers_lock.lock();
+		for (BufferedWriter writer : response_writers.values()) {
+			writer.flush();
+			writer.close();
+		}
+		response_writers.clear();
+		for (PipedWriter writer : piped_writers.values()) {
+			writer.flush();
+			writer.close();
+		}
+                piped_writers.clear();
+		try
+		{
+			command_connection.stop();
+		}
+		catch (Exception e) {}
+		try
+		{
+			event_connection.stop();
+		}
+		catch (Exception e) {}
+		try
+		{
+			status_change_connection.stop();
+		}
+		catch (Exception e) {}
+                sessionID = null;
             }
             catch (Exception e)
             {
@@ -196,6 +230,8 @@ public class CGateSession extends CGateObject
             }
             finally
             {
+		    logger.debug("Close in finally");
+		piped_writers_lock.unlock();
                 clearCache();
                 connected = false;
                 ping_connections.notify();
@@ -204,7 +240,7 @@ public class CGateSession extends CGateObject
     }
 
     /**
-     * 
+     *
      * @param cgate_command
      * @return ArrayList of C-Gate response lines
      * @throws com.daveoxley.cbus.CGateException
@@ -237,6 +273,32 @@ public class CGateSession extends CGateObject
         }
     }
 
+    private void updateSessionID() {
+        try {
+            if (!isConnected()) {
+                return;
+            }
+            sendCommand("session_id tag openHAB C-Bus Binding").handle200();
+            ArrayList<String> resp_array = sendCommand("session_id").toArray();
+            this.sessionID = responseToMap(resp_array.get(0)).get("sessionID");
+            logger.debug("Updated session id: {}", sessionID);
+        } catch (CGateException e) {
+            logger.error("Cannot check session id", e);
+        }
+    }
+
+    public String getSessionID() {
+        if (sessionID == null) {
+            updateSessionID();
+        }
+        return sessionID;
+    }
+
+    public CGateThreadPool getThreadPool()
+    {
+        return m_threadPool;
+    }
+
     private abstract class CGateConnection implements Runnable
     {
         private final InetAddress server;
@@ -249,9 +311,9 @@ public class CGateSession extends CGateObject
 
         private Socket socket;
 
-        private volatile BufferedReader input_reader;
+        private volatile BufferedReader input_reader = null;
 
-        private PrintWriter output_stream;
+        private PrintWriter output_stream = null;
 
         protected CGateConnection(InetAddress server, int port, boolean create_output)
         {
@@ -268,6 +330,7 @@ public class CGateSession extends CGateObject
             try
             {
                 socket = new Socket(server, port);
+                socket.setSoTimeout(10000);
                 input_reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 if (create_output)
                     output_stream = new PrintWriter(socket.getOutputStream(), true);
@@ -383,8 +446,10 @@ public class CGateSession extends CGateObject
             thread = new Thread(this);
             thread.setDaemon(true);
             thread.start();
+            thread.setName("CGateConnectionPing");
         }
 
+        @Override
         public synchronized void run()
         {
             try
@@ -398,11 +463,13 @@ public class CGateSession extends CGateObject
                             wait(10000l);
                         }
                         catch (InterruptedException e) {}
-
+			logger.debug("PingConnection connected {} keepalive {}",connected, pingKeepAlive);
                         if (connected && pingKeepAlive)
                             CGateInterface.noop(CGateSession.this);
                     }
-                    catch (Exception e) {}
+                    catch (Exception e) {
+                        logger.error("CGate connection error {}", e);
+		    }
                 }
             }
             finally
@@ -418,7 +485,10 @@ public class CGateSession extends CGateObject
         {
             PipedWriter piped_writer = new PipedWriter();
             BufferedWriter out = new BufferedWriter(piped_writer);
+	    piped_writers_lock.lock();
             response_writers.put(id, out);
+            piped_writers.put(id, piped_writer); //JH Is this needed?
+	    piped_writers_lock.unlock();
 
             PipedReader piped_reader = new PipedReader(piped_writer);
             return new BufferedReader(piped_reader);
@@ -442,7 +512,6 @@ public class CGateSession extends CGateObject
         {
             String id = getID();
             BufferedReader response_reader = getReader(id);
-
             command_connection.println("[" + id + "] " + cgate_command);
 
             return new Response(response_reader);
@@ -456,13 +525,19 @@ public class CGateSession extends CGateObject
         @Override
         protected void logConnected() throws IOException
         {
-            log.debug(getInputReader().readLine());
+            logger.debug("{}",getInputReader().readLine());
         }
 
         @Override
         public void doRun() throws IOException
         {
-            final String response = getInputReader().readLine();
+            String response;
+            try {
+                response = getInputReader().readLine();
+            } catch (SocketTimeoutException e) {
+		logger.trace("IO Timeout Command Connection");
+                return;
+            }
             if (response == null)
                 super.stop();
             else
@@ -470,17 +545,22 @@ public class CGateSession extends CGateObject
                 int id_end = response.indexOf("]");
                 String id = response.substring(1, id_end);
                 String actual_response = response.substring(id_end + 2);
-
+		piped_writers_lock.lock();
                 BufferedWriter writer = response_writers.get(id);
-                writer.write(actual_response);
-                writer.newLine();
-
-                if (!Response.responseHasMore(actual_response))
-                {
-                    writer.flush();
-                    writer.close();
-                    response_writers.remove(id);
-                }
+		if (writer != null)
+		{
+			writer.write(actual_response);
+			writer.newLine();
+			if (!Response.responseHasMore(actual_response))
+			{
+				writer.flush();
+				writer.close();
+				piped_writers.get(id).close(); //JH From Openhab
+				response_writers.remove(id);
+				piped_writers.remove(id);  //JH From Opehab
+			}
+		}
+		piped_writers_lock.unlock();
             }
         }
     }
@@ -496,52 +576,18 @@ public class CGateSession extends CGateObject
 
     private class EventConnection extends CGateConnection
     {
-        private final ThreadPool event_callback_pool;
+        private final CGateThreadPoolExecutor sc_threadPool;
 
         private final List<EventCallback> event_callbacks = Collections.synchronizedList(new ArrayList<EventCallback>());
 
         private EventConnection(InetAddress server, int port)
         {
             super(server, port, false);
-            ThreadPoolCreator tp_creator = new ThreadPoolCreator() {
+	    CGateThreadPool threadPool = CGateSession.this.getThreadPool();
 
-                public ThreadObjectFactory getThreadObjectFactory() {
-                    return new ThreadObjectFactory() {
-                        @Override
-                        public void initialiseThread(Thread thread)
-                        {
-                            thread.setName("Event");
-                        }
-
-                        @Override
-                        public void activateThread(Thread thread)
-                        {
-                        }
-
-                        @Override
-                        public void passivateThread(Thread thread)
-                        {
-                        }
-                    };
-                }
-
-                public Config getThreadPoolConfig() {
-                    Config config = new Config();
-                    config.maxActive = 10;
-                    config.minIdle   = 2;
-                    config.maxIdle   = 5;
-                    config.testOnBorrow = false;
-                    config.testOnReturn = true;
-                    config.whenExhaustedAction = GenericObjectPool.WHEN_EXHAUSTED_BLOCK;
-                    config.maxWait = -1;
-                    return config;
-                }
-
-                public String getThreadPoolName() {
-                    return "EventPool";
-                }
-            };
-            event_callback_pool = new ThreadPool(tp_creator.getThreadObjectFactory(), tp_creator.getThreadPoolConfig());
+            if (threadPool == null)
+		new CGateException("No threadpool available");
+	    sc_threadPool = threadPool.CreateExecutor("EventConnection");
         }
 
         private void registerEventCallback(EventCallback event_callback)
@@ -552,7 +598,14 @@ public class CGateSession extends CGateObject
         @Override
         protected void doRun() throws IOException
         {
-            final String event = getInputReader().readLine();
+            String event;
+            try {
+                event = getInputReader().readLine();
+            } catch (SocketTimeoutException e) {
+                logger.trace("IO Timeout Event Connection");
+                return;
+            }
+
             if (event == null)
                 super.stop();
             else if (event.length() >= 19)
@@ -567,10 +620,9 @@ public class CGateSession extends CGateObject
                     {
                         if (event_callback.acceptEvent(event_code))
                         {
-                            WorkerThread callback_thread = (WorkerThread)event_callback_pool.borrowObject();
-                            callback_thread.execute(new Runnable() {
-                                public void run()
-                                {
+			    sc_threadPool.execute(new Runnable() {
+			        public void run()
+				{
                                     GregorianCalendar event_time = new GregorianCalendar(
                                             Integer.parseInt(event.substring(0, 4)),
                                             Integer.parseInt(event.substring(4, 6)),
@@ -578,11 +630,10 @@ public class CGateSession extends CGateObject
                                             Integer.parseInt(event.substring(9, 11)),
                                             Integer.parseInt(event.substring(11, 13)),
                                             Integer.parseInt(event.substring(13, 15)));
-
                                     event_callback.processEvent(CGateSession.this, event_code,
                                             event_time, event.length() == 19 ? null : event.substring(19));
                                 }
-                            }, null);
+                            });
                         }
                     }
                     catch (Exception e)
@@ -596,7 +647,7 @@ public class CGateSession extends CGateObject
 
     /**
      *
-     * @param event_callback
+     * @param status_change_callback
      */
     public void registerStatusChangeCallback(StatusChangeCallback status_change_callback)
     {
@@ -605,52 +656,18 @@ public class CGateSession extends CGateObject
 
     private class StatusChangeConnection extends CGateConnection
     {
-        private final ThreadPool sc_callback_pool;
+        private final CGateThreadPoolExecutor sc_threadPool;
 
         private final List<StatusChangeCallback> sc_callbacks = Collections.synchronizedList(new ArrayList<StatusChangeCallback>());
 
         private StatusChangeConnection(InetAddress server, int port)
         {
             super(server, port, false);
-            ThreadPoolCreator tp_creator = new ThreadPoolCreator() {
+	    CGateThreadPool threadPool = CGateSession.this.getThreadPool();
 
-                public ThreadObjectFactory getThreadObjectFactory() {
-                    return new ThreadObjectFactory() {
-                        @Override
-                        public void initialiseThread(Thread thread)
-                        {
-                            thread.setName("StatusChange");
-                        }
-
-                        @Override
-                        public void activateThread(Thread thread)
-                        {
-                        }
-
-                        @Override
-                        public void passivateThread(Thread thread)
-                        {
-                        }
-                    };
-                }
-
-                public Config getThreadPoolConfig() {
-                    Config config = new Config();
-                    config.maxActive = 10;
-                    config.minIdle   = 2;
-                    config.maxIdle   = 5;
-                    config.testOnBorrow = false;
-                    config.testOnReturn = true;
-                    config.whenExhaustedAction = GenericObjectPool.WHEN_EXHAUSTED_BLOCK;
-                    config.maxWait = -1;
-                    return config;
-                }
-
-                public String getThreadPoolName() {
-                    return "StatusChangePool";
-                }
-            };
-            sc_callback_pool = new ThreadPool(tp_creator.getThreadObjectFactory(), tp_creator.getThreadPoolConfig());
+            if (threadPool == null)
+		new CGateException("No threadpool available");
+	    sc_threadPool = threadPool.CreateExecutor("StatusChangeConnection");
         }
 
         private void registerStatusChangeCallback(StatusChangeCallback event_callback)
@@ -661,8 +678,15 @@ public class CGateSession extends CGateObject
         @Override
         protected void doRun() throws IOException
         {
-            final String status_change = getInputReader().readLine();
-            if (status_change == null)
+            String status_change;
+            try {
+                status_change = getInputReader().readLine();
+            } catch (SocketTimeoutException e) {
+                logger.trace("IO Timeout StatusChange");
+                return;
+            }
+
+	    if (status_change == null)
                 super.stop();
             else if (status_change.length() > 0)
             {
@@ -675,13 +699,12 @@ public class CGateSession extends CGateObject
                     {
                         try
                         {
-                            WorkerThread callback_thread = (WorkerThread)sc_callback_pool.borrowObject();
-                            callback_thread.execute(new Runnable() {
-                                public void run()
+			    sc_threadPool.execute(new Runnable() {
+				public void run()
                                 {
                                     sc_callback.processStatusChange(CGateSession.this, status_change);
                                 }
-                            }, null);
+                            });
                         }
                         catch (Exception e)
                         {
