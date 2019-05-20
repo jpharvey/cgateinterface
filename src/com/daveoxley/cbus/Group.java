@@ -185,6 +185,18 @@ public class Group extends CGateObject implements Comparable<Group>
     }
 
     /**
+     * Issue a <code>trigger event //PROJECT/NET_ID/GROUP_ID</code> to the C-Gate server.
+     *
+     * @see <a href="http://www.clipsal.com/cis/downloads/Toolkit/CGateServerGuide_1_0.pdf">
+     *      <i>C-Gate Server Guide 4.3.100</i></a>
+     * @param level
+     * @throws CGateException
+     */
+    public Response TriggerEvent(int level) throws CGateException {
+        return getCGateSession().sendCommand(
+                "trigger event " + getProjectAddress() + "/" + getResponseAddress(true) + " " + level);
+    }
+    /**
      * Issue a <code>ramp //PROJECT/NET_ID/GROUP_ID</code> to the C-Gate server.
      *
      * @see <a href="http://www.clipsal.com/cis/downloads/Toolkit/CGateServerGuide_1_0.pdf">
