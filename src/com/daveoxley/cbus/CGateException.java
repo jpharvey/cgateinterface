@@ -86,6 +86,6 @@ public class CGateException extends Exception
         printStackTrace(pr);
         message += new_line + new_line + sw.toString();
 
-        logger.error("{}",message);
+        // logger.error("{}",message);
     }
 }
